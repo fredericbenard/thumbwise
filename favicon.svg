@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#17171a"/>
-  <path d="M11 22c0-5 2.2-9 5.4-10.6.5-.3 1.1.1 1.1.7v3.2c0 .4.3.8.8.8h.2c2.4 0 4.5 1.9 4.5 4.4V23c0 1.1-.9 2-2 2h-6c-2.2 0-4-1.8-4-3z" fill="#f4f4f5"/>
-  <path d="M13.2 11.2c.8-2.4 3-3.7 4.6-2.4 1 0.8 1.1 2.3.6 3.6" stroke="#f4f4f5" stroke-width="1.8" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Thumbwise">
+  <rect width="32" height="32" rx="7.5" fill="#b4471f"/>
+  <g fill="#ffffff" transform="translate(16 16) scale(.86) translate(-16 -16)">
+    <path d="M12.9 26.1h8.5a3.5 3.5 0 0 0 3.45-2.93l1.1-6.62a2.95 2.95 0 0 0-2.91-3.43h-3.86l.5-3.02a2.6 2.6 0 0 0-2.56-3.03c-.92 0-1.76.51-2.18 1.34l-2.04 4.02v13.67z"/>
+    <rect x="6.2" y="14.45" width="5" height="11.65" rx="1.6"/>
+  </g>
 </svg>
