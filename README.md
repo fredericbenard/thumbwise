@@ -8,7 +8,31 @@ against a daily goal of 3–4.
 It is a plain static site: no build step, no dependencies, no backend. All
 state lives in the browser's `localStorage`.
 
-## The routine
+## Programs
+
+A **program** is a named routine: an ordered set of exercises plus the daily
+session goal they should be done against. There is one today — **Program 2**,
+five exercises, three to four sessions a day — and the app selects it
+automatically.
+
+The structure is there so more can be added. A program is one entry in the
+`PROGRAMS` array in [`app.js`](app.js):
+
+```js
+{
+  id: "program-2",
+  name: "Program 2",
+  goalMin: 3,
+  goalMax: 4,
+  exercises: PROGRAM_2_EXERCISES,
+}
+```
+
+Add a second entry and a picker appears on the home screen on its own; the
+home headline, the session dots, and the daily-goal copy all read from the
+active program, and each program keeps its own session count for the day.
+
+## Program 2
 
 | # | Exercise | Type | Hold | Reps |
 |---|----------|------|------|------|
@@ -39,7 +63,7 @@ from, so it can be checked against the therapist's sheet.
 ## Features
 
 - **Daily tracker** — session count keyed to the calendar date, so it resets on
-  its own each day.
+  its own each day, and stored per program.
 - **Sound and haptics** — a short Web Audio chime per rep plus
   `navigator.vibrate` where supported. Toggleable, and the choice is persisted.
 - **Theme switch** — `Auto` follows the system preference, `Pale` and `Dark`
@@ -109,11 +133,16 @@ the animation stays smooth.
 
 ### Editing the routine
 
-The exercises are a single `EXERCISES` array at the top of `app.js`. Each entry
-carries its `title`, the original French `original` line, a `detail`
-instruction, `hold` seconds (or `null`), `repsMin`/`repsMax`, a `type` of
-`"hold"` or `"sequence"`, and a `figure` key into the `FIGURES` map. Adding an
+Program 2's exercises are the `PROGRAM_2_EXERCISES` array at the top of
+`app.js`. Each entry carries its `title`, the original French `original` line, a
+`detail` instruction, `hold` seconds (or `null`), `repsMin`/`repsMax`, a `type`
+of `"hold"` or `"sequence"`, and a `figure` key into the `FIGURES` map. Adding an
 exercise means adding an entry and a matching figure — no other changes needed.
+
+Stored state lives under the `thumbwise-v1` key: the date, the selected
+program, sound and theme choices, and today's session counts keyed by program
+id. Older state that predates programs held a single session number; it is
+migrated to Program 2's count on load.
 
 Both `styles.css` and `app.js` are linked with a `?v=N` cache-busting query
 parameter in `index.html`; bump it when deploying a change so returning users
