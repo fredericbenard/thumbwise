@@ -312,6 +312,23 @@ p {
   padding: 2px 16px;
 }
 
+/* Names the program the list belongs to. */
+.plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.plan-head span {
+  color: var(--faint);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 .plan-item {
   display: grid;
   grid-template-columns: 26px 1fr;
@@ -813,7 +830,11 @@ p {
   }
 
   .plan-item {
-    padding-block: 8px;
+    padding-block: 7px;
+  }
+
+  .plan-head {
+    padding: 7px 0 6px;
   }
 
   .card {

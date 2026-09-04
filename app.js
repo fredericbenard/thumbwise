@@ -1,9 +1,7 @@
 const STORAGE_KEY = "thumbwise-v1";
-const DAILY_GOAL_MIN = 3;
-const DAILY_GOAL_MAX = 4;
 const REST_MS = 1600;
 
-const EXERCISES = [
+const PROGRAM_2_EXERCISES = [
   {
     id: 1,
     title: "Thumb into the palm",
@@ -77,6 +75,24 @@ const EXERCISES = [
   },
 ];
 
+/* A program is a named routine: an ordered set of exercises plus the daily
+   session goal they are meant to be done against. Only one exists today, so
+   the app selects it automatically; adding a second is another entry here
+   and the picker on the home screen appears on its own. */
+const PROGRAMS = [
+  {
+    id: "program-2",
+    name: "Program 2",
+    goalMin: 3,
+    goalMax: 4,
+    exercises: PROGRAM_2_EXERCISES,
+  },
+];
+
+const DEFAULT_PROGRAM_ID = PROGRAMS[0].id;
+
+const findProgram = (id) => PROGRAMS.find((p) => p.id === id) || PROGRAMS[0];
+
 const FIGURES = {
   palm: `<img src="./figures/thumb-into-palm.jpg" alt="Right index finger pressing on the tip of the left thumb, folding it into the palm">`,
   fingers: `<img src="./figures/thumb-to-fingers.jpg" alt="Thumb touching the index fingertip">`,
@@ -98,8 +114,31 @@ const THEME_BAR = { light: "#f4f4f5", dark: "#1b1b20" };
 
 const readTheme = (value) => (THEMES.includes(value) ? value : "system");
 
+/* Today's session counts, keyed by program id, so each program tracks its
+   own daily total. Before programs existed this was a single number; that
+   value belongs to the only program there was. */
+const readSessions = (value) => {
+  if (typeof value === "number") {
+    const count = Number(value) || 0;
+    return count > 0 ? { [DEFAULT_PROGRAM_ID]: count } : {};
+  }
+  if (!value || typeof value !== "object") return {};
+  const counts = {};
+  for (const [id, raw] of Object.entries(value)) {
+    const count = Number(raw);
+    if (Number.isFinite(count) && count > 0) counts[id] = count;
+  }
+  return counts;
+};
+
 const loadState = () => {
-  const fresh = { date: todayKey(), sessions: 0, sound: true, theme: "system" };
+  const fresh = {
+    date: todayKey(),
+    sessions: {},
+    sound: true,
+    theme: "system",
+    programId: DEFAULT_PROGRAM_ID,
+  };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fresh;
@@ -107,13 +146,14 @@ const loadState = () => {
     const carried = {
       sound: parsed.sound !== false,
       theme: readTheme(parsed.theme),
+      programId: findProgram(parsed.programId).id,
     };
     if (parsed.date !== todayKey()) {
-      return { date: todayKey(), sessions: 0, ...carried };
+      return { date: todayKey(), sessions: {}, ...carried };
     }
     return {
       date: parsed.date,
-      sessions: Number(parsed.sessions) || 0,
+      sessions: readSessions(parsed.sessions),
       ...carried,
     };
   } catch {
@@ -168,7 +208,14 @@ const stopTimers = () => {
   restId = 0;
 };
 
-const currentExercise = () => EXERCISES[session.exerciseIndex];
+const activeProgram = () => findProgram(session.persist.programId);
+
+const exercises = () => activeProgram().exercises;
+
+const sessionsToday = (programId = session.persist.programId) =>
+  Number(session.persist.sessions[programId]) || 0;
+
+const currentExercise = () => exercises()[session.exerciseIndex];
 
 const unlockAudio = () => {
   if (!session.persist.sound) return;
@@ -212,7 +259,7 @@ const atTarget = () => {
 };
 
 const resetExercise = (index = session.exerciseIndex) => {
-  const exercise = EXERCISES[index];
+  const exercise = exercises()[index];
   session.exerciseIndex = index;
   session.reps = 0;
   session.phase = "idle";
@@ -225,10 +272,11 @@ const resetExercise = (index = session.exerciseIndex) => {
 const completeSession = () => {
   const today = todayKey();
   if (session.persist.date !== today) {
-    session.persist.sessions = 0;
+    session.persist.sessions = {};
     session.persist.date = today;
   }
-  session.persist.sessions += 1;
+  const programId = activeProgram().id;
+  session.persist.sessions[programId] = sessionsToday(programId) + 1;
   saveState(session.persist);
   session.view = "done";
   stopTimers();
@@ -250,7 +298,7 @@ const startSession = () => {
 const countRep = () => {
   session.reps += 1;
   chime("done");
-  if (atTarget() && session.exerciseIndex === EXERCISES.length - 1) {
+  if (atTarget() && session.exerciseIndex === exercises().length - 1) {
     completeSession();
     return;
   }
@@ -309,7 +357,7 @@ const setHold = (seconds) => {
 
 const nextExercise = () => {
   if (!canAdvance()) return;
-  if (session.exerciseIndex >= EXERCISES.length - 1) {
+  if (session.exerciseIndex >= exercises().length - 1) {
     completeSession();
     return;
   }
@@ -331,6 +379,15 @@ const toggleSound = () => {
   session.persist.sound = !session.persist.sound;
   if (session.persist.sound) unlockAudio();
   saveState(session.persist);
+  render();
+};
+
+const selectProgram = (id) => {
+  const program = findProgram(id);
+  if (program.id === session.persist.programId) return;
+  session.persist.programId = program.id;
+  saveState(session.persist);
+  resetExercise(0);
   render();
 };
 
@@ -368,15 +425,47 @@ const escapeHtml = (value) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+const COUNT_WORDS = [
+  "zero", "one", "two", "three", "four", "five",
+  "six", "seven", "eight", "nine", "ten",
+];
+
+const countWord = (n) => COUNT_WORDS[n] || String(n);
+
+/* Reads from the program rather than being hardcoded, so a second program
+   with a different length or goal describes itself correctly. */
+const programHeadline = (program) => {
+  const count = countWord(program.exercises.length);
+  const noun = program.exercises.length === 1 ? "exercise" : "exercises";
+  const { goalMin: min, goalMax: max } = program;
+  let cadence;
+  if (min !== max) cadence = `${countWord(min)} to ${countWord(max)} times a day`;
+  else if (min === 1) cadence = "once a day";
+  else if (min === 2) cadence = "twice a day";
+  else cadence = `${countWord(min)} times a day`;
+  return `${count.charAt(0).toUpperCase()}${count.slice(1)} ${noun},<br />${cadence}.`;
+};
+
+/* Only worth showing once there is a choice to make. */
+const renderProgramPicker = () => {
+  if (PROGRAMS.length < 2) return "";
+  const chips = PROGRAMS.map(
+    (program) =>
+      `<button class="chip${program.id === session.persist.programId ? " active" : ""}" data-action="program" data-program="${program.id}">${escapeHtml(program.name)}</button>`
+  ).join("");
+  return `<div class="row"><span class="lede">Program</span><div class="chips">${chips}</div></div>`;
+};
+
 const renderHome = () => {
-  const { sessions } = session.persist;
-  const dots = Array.from({ length: DAILY_GOAL_MAX }, (_, index) => {
+  const program = activeProgram();
+  const sessions = sessionsToday();
+  const dots = Array.from({ length: program.goalMax }, (_, index) => {
     const done = index < sessions;
-    const goal = index === DAILY_GOAL_MIN - 1;
+    const goal = index === program.goalMin - 1;
     return `<div class="session-dot${done ? " done" : ""}${goal ? " goal" : ""}">${index + 1}</div>`;
   }).join("");
 
-  const items = EXERCISES.map((exercise) => {
+  const items = program.exercises.map((exercise) => {
     const timing = exercise.hold
       ? `${exercise.holdLabel || `${exercise.hold}s`} · ${exercise.repsMin}–${exercise.repsMax}×`
       : `${exercise.repsMin}–${exercise.repsMax}×`;
@@ -395,7 +484,7 @@ const renderHome = () => {
     <section class="screen screen-home">
       <div>
         <p class="kicker">Thumb ergotherapy</p>
-        <h1>Five exercises,<br />three to four times a day.</h1>
+        <h1>${programHeadline(program)}</h1>
       </div>
       <div class="screen-body">
       <div class="card">
@@ -403,12 +492,19 @@ const renderHome = () => {
           <p class="kicker">Today</p>
           <p class="tally">
             <strong>${sessions}</strong>
-            <span>of ${DAILY_GOAL_MIN}–${DAILY_GOAL_MAX} sessions</span>
+            <span>of ${program.goalMin}–${program.goalMax} sessions</span>
           </p>
         </div>
         <div class="sessions" aria-label="Daily sessions">${dots}</div>
       </div>
-      <div class="card plan">${items}</div>
+      ${renderProgramPicker()}
+      <div class="card plan">
+        <div class="plan-head">
+          <p class="kicker">${escapeHtml(program.name)}</p>
+          <span>${program.exercises.length} exercises</span>
+        </div>
+        ${items}
+      </div>
       </div>
       <div class="actions">
         <button class="btn btn-primary" data-action="start">Start a session</button>
@@ -484,13 +580,14 @@ const phaseLabel = (exercise) => {
 const renderExercise = () => {
   const exercise = currentExercise();
   const index = session.exerciseIndex;
-  const progress = ((index + (session.reps / exercise.repsMax)) / EXERCISES.length) * 100;
+  const progress =
+    ((index + session.reps / exercise.repsMax) / exercises().length) * 100;
   const primaryDisabled =
     session.phase === "running" ||
     session.phase === "rest" ||
     (session.phase === "complete" && !canAdvance());
   const nextDisabled = !canAdvance();
-  const lastExercise = index === EXERCISES.length - 1;
+  const lastExercise = index === exercises().length - 1;
   const primaryLabel =
     session.phase === "complete"
       ? lastExercise
@@ -508,7 +605,7 @@ const renderExercise = () => {
     <section class="screen screen-exercise">
       <div class="topbar">
         <button class="icon-btn" data-action="back">Back</button>
-        <p class="kicker">Exercise ${index + 1} of ${EXERCISES.length}</p>
+        <p class="kicker">Exercise ${index + 1} of ${exercises().length}</p>
         <button class="icon-btn" data-action="sound">${
           session.persist.sound ? "Sound" : "Muted"
         }</button>
@@ -567,25 +664,26 @@ const renderExercise = () => {
 };
 
 const renderDone = () => {
-  const { sessions } = session.persist;
+  const program = activeProgram();
+  const sessions = sessionsToday();
   const message =
-    sessions >= DAILY_GOAL_MAX
+    sessions >= program.goalMax
       ? "Daily plan complete. You can stop here, or add another session later if it feels good."
-      : sessions >= DAILY_GOAL_MIN
-        ? "Daily minimum is done. One more session would finish the 3–4 range."
-        : `${DAILY_GOAL_MIN - sessions} more session${DAILY_GOAL_MIN - sessions === 1 ? "" : "s"} to reach today’s minimum.`;
+      : sessions >= program.goalMin
+        ? `Daily minimum is done. One more session would finish the ${program.goalMin}–${program.goalMax} range.`
+        : `${program.goalMin - sessions} more session${program.goalMin - sessions === 1 ? "" : "s"} to reach today’s minimum.`;
 
   return `
     <section class="screen">
       <div class="done-mark" aria-hidden="true">✓</div>
       <div>
-        <p class="kicker">Session ${sessions} today</p>
+        <p class="kicker">${escapeHtml(program.name)} · Session ${sessions} today</p>
         <h1>That’s the full set.</h1>
       </div>
       <p class="lede">${escapeHtml(message)}</p>
       <div class="card">
         <div class="sessions" aria-label="Daily sessions">
-          ${Array.from({ length: DAILY_GOAL_MAX }, (_, index) => {
+          ${Array.from({ length: program.goalMax }, (_, index) => {
             const done = index < sessions;
             return `<div class="session-dot${done ? " done" : ""}">${index + 1}</div>`;
           }).join("")}
@@ -616,6 +714,7 @@ app.addEventListener("click", (event) => {
   if (action === "back") prevExercise();
   if (action === "sound") toggleSound();
   if (action === "theme") cycleTheme();
+  if (action === "program") selectProgram(target.dataset.program);
   if (action === "primary") {
     unlockAudio();
     if (session.phase === "complete") {
