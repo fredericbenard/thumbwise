@@ -439,23 +439,23 @@ const renderSequence = (exercise) => {
   return `<div class="sequence" aria-live="polite">${steps}</div>`;
 };
 
-const renderTimer = (exercise) => {
-  const total = session.holdSeconds * 1000;
-  const circumference = 2 * Math.PI * 74;
-  const offset = ringOffset(session.remainingMs || total, total);
+const renderHoldChips = (exercise) => {
   const choices = (exercise.holdChoices || [])
     .map(
       (value) =>
         `<button class="chip${session.holdSeconds === value ? " active" : ""}" data-action="hold" data-seconds="${value}">${value}s</button>`
     )
     .join("");
+  if (!choices) return "";
+  return `<div class="row row-hold"><span class="lede">Hold time</span><div class="chips">${choices}</div></div>`;
+};
+
+const renderTimer = (exercise) => {
+  const total = session.holdSeconds * 1000;
+  const circumference = 2 * Math.PI * 74;
+  const offset = ringOffset(session.remainingMs || total, total);
 
   return `
-    ${
-      choices
-        ? `<div class="row"><span class="lede">Hold time</span><div class="chips">${choices}</div></div>`
-        : ""
-    }
     <div class="timer-wrap">
       <svg class="timer-ring" viewBox="0 0 168 168" aria-hidden="true">
         <circle class="track" cx="84" cy="84" r="74"></circle>
@@ -524,8 +524,15 @@ const renderExercise = () => {
       </div>
       ${
         exercise.type === "hold"
-          ? `<div class="figure">${FIGURES[exercise.figure]}</div>${renderTimer(exercise)}`
-          : `<div class="figure figure-compact">${FIGURES[exercise.figure]}</div>${renderSequence(exercise)}`
+          ? `${renderHoldChips(exercise)}
+      <div class="stage">
+        <div class="figure">${FIGURES[exercise.figure]}</div>
+        ${renderTimer(exercise)}
+      </div>`
+          : `<div class="stage stage-sequence">
+        <div class="figure">${FIGURES[exercise.figure]}</div>
+        ${renderSequence(exercise)}
+      </div>`
       }
       </div>
       <div class="reps">
