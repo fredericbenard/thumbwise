@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ergo-thumb-v1";
+const STORAGE_KEY = "thumbwise-v1";
 const DAILY_GOAL_MIN = 3;
 const DAILY_GOAL_MAX = 4;
 const REST_MS = 1600;
@@ -92,21 +92,32 @@ const todayKey = () => {
   return `${now.getFullYear()}-${month}-${day}`;
 };
 
+const THEMES = ["system", "light", "dark"];
+const THEME_LABEL = { system: "Auto", light: "Pale", dark: "Dark" };
+const THEME_BAR = { light: "#f4f4f5", dark: "#1b1b20" };
+
+const readTheme = (value) => (THEMES.includes(value) ? value : "system");
+
 const loadState = () => {
+  const fresh = { date: todayKey(), sessions: 0, sound: true, theme: "system" };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { date: todayKey(), sessions: 0, sound: true };
+    if (!raw) return fresh;
     const parsed = JSON.parse(raw);
+    const carried = {
+      sound: parsed.sound !== false,
+      theme: readTheme(parsed.theme),
+    };
     if (parsed.date !== todayKey()) {
-      return { date: todayKey(), sessions: 0, sound: parsed.sound !== false };
+      return { date: todayKey(), sessions: 0, ...carried };
     }
     return {
       date: parsed.date,
       sessions: Number(parsed.sessions) || 0,
-      sound: parsed.sound !== false,
+      ...carried,
     };
   } catch {
-    return { date: todayKey(), sessions: 0, sound: true };
+    return fresh;
   }
 };
 
@@ -115,6 +126,25 @@ const saveState = (state) => {
 };
 
 const app = document.querySelector("#app");
+
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+const applyTheme = () => {
+  const theme = session.persist.theme;
+  const root = document.documentElement;
+  if (theme === "system") root.removeAttribute("data-theme");
+  else root.dataset.theme = theme;
+
+  const resolved =
+    theme === "system" ? (systemDark.matches ? "dark" : "light") : theme;
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.remove());
+  const meta = document.createElement("meta");
+  meta.name = "theme-color";
+  meta.content = THEME_BAR[resolved];
+  document.head.appendChild(meta);
+};
 
 const session = {
   view: "home",
@@ -304,6 +334,14 @@ const toggleSound = () => {
   render();
 };
 
+const cycleTheme = () => {
+  const next = (THEMES.indexOf(session.persist.theme) + 1) % THEMES.length;
+  session.persist.theme = THEMES[next];
+  saveState(session.persist);
+  applyTheme();
+  render();
+};
+
 const formatSeconds = (ms) => (Math.ceil(ms / 1000) || 0).toString();
 
 const ringOffset = (ms, total) => {
@@ -357,15 +395,16 @@ const renderHome = () => {
     <section class="screen screen-home">
       <div>
         <p class="kicker">Thumb ergotherapy</p>
-        <h1>Five exercises, three to four times a day.</h1>
+        <h1>Five exercises,<br />three to four times a day.</h1>
       </div>
       <div class="screen-body">
       <div class="card">
         <div class="row">
-          <div>
-            <p class="kicker">Today</p>
-            <p class="lede">${sessions} of ${DAILY_GOAL_MIN}–${DAILY_GOAL_MAX} sessions</p>
-          </div>
+          <p class="kicker">Today</p>
+          <p class="tally">
+            <strong>${sessions}</strong>
+            <span>of ${DAILY_GOAL_MIN}–${DAILY_GOAL_MAX} sessions</span>
+          </p>
         </div>
         <div class="sessions" aria-label="Daily sessions">${dots}</div>
       </div>
@@ -373,9 +412,14 @@ const renderHome = () => {
       </div>
       <div class="actions">
         <button class="btn btn-primary" data-action="start">Start a session</button>
-        <button class="btn btn-ghost" data-action="sound">${
-          session.persist.sound ? "Sound on" : "Sound off"
-        }</button>
+        <div class="btn-row">
+          <button class="btn btn-ghost" data-action="sound">${
+            session.persist.sound ? "Sound on" : "Sound off"
+          }</button>
+          <button class="btn btn-ghost" data-action="theme">Theme · ${
+            THEME_LABEL[session.persist.theme]
+          }</button>
+        </div>
       </div>
     </section>`;
 };
@@ -473,11 +517,11 @@ const renderExercise = () => {
         <div class="progress-fill" style="width:${progress}%"></div>
       </div>
       <div class="screen-body">
-      <div>
+      <div class="exercise-head">
         <h2>${escapeHtml(exercise.title)}</h2>
         <p class="quote">${escapeHtml(exercise.original)}</p>
+        <p class="lede">${escapeHtml(exercise.detail)}</p>
       </div>
-      <p class="lede">${escapeHtml(exercise.detail)}</p>
       ${
         exercise.type === "hold"
           ? `<div class="figure">${FIGURES[exercise.figure]}</div>${renderTimer(exercise)}`
@@ -564,6 +608,7 @@ app.addEventListener("click", (event) => {
   if (action === "home") goHome();
   if (action === "back") prevExercise();
   if (action === "sound") toggleSound();
+  if (action === "theme") cycleTheme();
   if (action === "primary") {
     unlockAudio();
     if (session.phase === "complete") {
@@ -581,4 +626,6 @@ app.addEventListener("click", (event) => {
   if (action === "next") nextExercise();
 });
 
+applyTheme();
+systemDark.addEventListener("change", applyTheme);
 render();
