@@ -1,6 +1,6 @@
 {
-  "name": "Ergo — thumb exercises",
-  "short_name": "Ergo",
+  "name": "Thumbwise — thumb exercises",
+  "short_name": "Thumbwise",
   "description": "Guided thumb ergotherapy with timers and repetition counters.",
   "start_url": "./index.html",
   "display": "standalone",
